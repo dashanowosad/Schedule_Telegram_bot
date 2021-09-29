@@ -1,6 +1,0 @@
-ru/app/Parsing_JSON.java
- ru.app.Parsing_JSON
-ru/app/App.java
- ru.app.App
-ru/app/Commands.java
- ru.app.Commands
