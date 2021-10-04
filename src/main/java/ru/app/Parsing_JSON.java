@@ -1,11 +1,13 @@
 package ru.app;
 
+import java.io.IOException;
+
 public class Parsing_JSON {
     private String Text; //текст персонажа
     private String UserId; //id пользователя
     private String Language; //язык пользователя
 
-    public Parsing_JSON(String JSON){
+    public Parsing_JSON(String JSON) throws IOException {
         this.Text = JSON.substring(JSON.indexOf("text="), JSON.indexOf(", entities"))
                 .replace("text='","")
                 .replace("'","");
@@ -26,5 +28,6 @@ public class Parsing_JSON {
     public String GetLanguage(){
         return this.Language;
     }
+
 
 }

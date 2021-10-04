@@ -5,21 +5,28 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
+import java.sql.SQLException;
 import java.util.Properties;
 
 public class Commands {
     private String Result;
     private String Language;
+    private String UserId;
+    private String command;
     private Properties properties;
 
-    public Commands(String command, String language) throws IOException {
-        this.Language = language;
+    public Commands(Parsing_JSON parsing_json) throws IOException, SQLException {
+        this.Language = parsing_json.GetLanguage();
+        this.UserId = parsing_json.GetUserId();
+        this.command = parsing_json.GetText();
+
+        ///TODO
         this.properties = new Properties();
-        if (language.equals("ru"))
+        if (this.Language.equals("ru"))
             this.properties.load(new InputStreamReader(new FileInputStream("src/main/resources/lang_ru.properties"),Charset.forName("windows-1252")));
         else
             this.properties.load(new FileReader("src/main/resources/lang_en.properties"));
+        ///
 
         if (command.contains("/start"))
             this.Start();
@@ -37,8 +44,10 @@ public class Commands {
             this.Wrong_Command(command);
     }
 
-    private void Start(){
+    private void Start() throws SQLException, IOException {
         this.Result = this.properties.getProperty(this.Language + ".start");
+        DataBase dataBase = new DataBase();
+        dataBase.CheckUser(this.UserId, this.Language);
     }
 
     private void Help(){

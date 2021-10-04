@@ -7,6 +7,7 @@ import com.pengrad.telegrambot.request.SendMessage;
 
 import java.io.FileReader;
 import java.io.IOException;
+import java.sql.SQLException;
 import java.util.Properties;
 
 public class App {
@@ -18,12 +19,12 @@ public class App {
         TelegramBot bot = new TelegramBot(token);
         bot.setUpdatesListener(updates -> {
             updates.forEach(update -> {
-                Parsing_JSON parsing_json;
-                parsing_json = new Parsing_JSON(update.toString());
                 try {
-                    Commands commands = new Commands(parsing_json.GetText(), parsing_json.GetLanguage());
+                    Parsing_JSON parsing_json;
+                    parsing_json = new Parsing_JSON(update.toString());
+                    Commands commands = new Commands(parsing_json);
                     bot.execute(new SendMessage(update.message().chat().id(), commands.GetResult()));
-                } catch (IOException e) {
+                } catch (IOException | SQLException e) {
                     bot.execute(new SendMessage(update.message().chat().id(), e.getMessage()));
                 }
             });
