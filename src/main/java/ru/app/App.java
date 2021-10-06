@@ -21,9 +21,8 @@ public class App {
             updates.forEach(update -> {
                 try {
                     Parsing_JSON parsing_json;
-                    parsing_json = new Parsing_JSON(update.toString());
-                    Commands commands = new Commands(parsing_json);
-                    bot.execute(new SendMessage(update.message().chat().id(), commands.GetResult()));
+                    parsing_json = new Parsing_JSON(update);
+                    Commands commands = new Commands(parsing_json, bot, update);
                 } catch (IOException | SQLException e) {
                     bot.execute(new SendMessage(update.message().chat().id(), e.getMessage()));
                 }
