@@ -25,11 +25,6 @@ public class App {
 
                     Thread thread = new Thread(new MyThreads(update, bot));
                     thread.start();
-                    try {
-                        thread.join();
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
                     System.out.println(thread.getId());
 
             });
