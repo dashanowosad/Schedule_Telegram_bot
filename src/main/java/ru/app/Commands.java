@@ -14,6 +14,8 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.Charset;
 import java.sql.SQLException;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.*;
 
 public class Commands {
@@ -21,6 +23,8 @@ public class Commands {
     private String UserId;
     private String command;
     private Properties properties;
+    private DataBase dataBase;
+
 
     private TelegramBot bot;
     private Update update;
@@ -33,10 +37,14 @@ public class Commands {
         this.command = parsing_json.GetText();
         this.bot = bot;
         this.update = update;
+        this.dataBase = new DataBase();
 
+        this.dataBase.CheckUser(this.UserId, this.Language);
+        String state = this.dataBase.GetUserState(this.UserId);
+//        System.out.println(state);
 //        this.remember = new ArrayList<>();
 
-        ///TODO
+        ///TODO использование языка из базы данных (выбор языка пользователем)
         this.properties = new Properties();
         if (this.Language.equals("ru"))
             this.properties.load(new InputStreamReader(new FileInputStream("src/main/resources/lang_ru.properties"),Charset.forName("windows-1252")));
@@ -50,21 +58,27 @@ public class Commands {
             this.Help();
         else if (command.contains("/add"))
             this.Add(command.replace("/add",""));
-        else if (command.contains("/remember"))
-            this.Remember(command.replace("/remember",""));
+        else if (command.contains("/remember") && state.equals("-1"))
+//            this.Remember(command.replace("/remember", ""));
+            this.Remember();
         else if (command.contains("/show_schedule"))
             this.Show_Schedule(command.replace("/show_schedule",""));
         else if (command.contains("/delete"))
             this.Delete(command.replace("/delete",""));
+
+        else if (state.equals("STATE_REMEMBER"))
+            this.Remember1(this.command);
+        else if (state.equals("STATE_REMEMBER1"))
+            this.Remember2(this.command);
+        else if (state.equals("STATE_REMEMBER2"))
+            this.Remember3(this.command);
+
         else
             this.Wrong_Command(command);
     }
 
-    private void Start() throws SQLException, IOException {
+    private void Start() {
         String Result = this.properties.getProperty(this.Language + ".start");
-        DataBase dataBase = new DataBase();
-        dataBase.CheckUser(this.UserId, this.Language);
-
         this.bot.execute(new SendMessage(update.message().chat().id(), Result));
     }
 
@@ -78,28 +92,40 @@ public class Commands {
         System.out.println(text);
     }
 
-    private void Remember(String text){
-        if ((this.Updates(this.properties.getProperty(this.Language + ".remember1")) < 0) ||
-                (this.Updates(this.properties.getProperty(this.Language + ".remember2")) < 0) ||
-                (this.Updates(this.properties.getProperty(this.Language + ".remember3")) < 0)) {
-            this.bot.execute(new SendMessage(update.message().chat().id(), this.properties.getProperty(this.Language + ".timeout")));
-            return;
-        }
-        else {
-            //TODO отложенные сообщения
-//            if (this.remembers == null)
-//                this.remembers = new PriorityQueue<>();
-//            Calendar calendar = Calendar.getInstance();
-//            System.out.println(this.remember.get(0) + " " + this.remember.get(1) + " " + this.remember.get(2) + " ");
-//            System.out.println(calendar.get(Calendar.DAY_OF_MONTH) + " " + calendar.get(Calendar.MONTH) + " " + calendar.get(Calendar.YEAR) + " " + calendar.getTime());
-//            this.remember.clear();
-///////////////////////
-            this.bot.execute(new SendMessage(update.message().chat().id(), this.properties.getProperty(this.Language + ".remember4")));
-        }
-        GetUpdates getUpdates = new GetUpdates().offset(this.update.updateId() + 1);
-        GetUpdatesResponse updatesResponse = bot.execute(getUpdates);
+    private void Remember() throws SQLException {
+        this.dataBase.SetUserState(this.UserId, "STATE_REMEMBER");
+        this.bot.execute(new SendMessage(this.update.message().chat().id(), this.properties.getProperty(this.Language + ".remember1")));
+    }
+    private void Remember1(String text) throws SQLException {
+        try {
+            Date date = new SimpleDateFormat("dd.MM.yyyy").parse(text);
+            String resDate = new SimpleDateFormat("yyyy-MM-dd").format(date);
 
+            this.dataBase.AddDate(this.UserId, resDate);
+            this.dataBase.SetUserState(this.UserId, "STATE_REMEMBER1");
+            this.bot.execute(new SendMessage(this.update.message().chat().id(), this.properties.getProperty(this.Language + ".remember2")));
+        } catch (ParseException e) {
+            this.bot.execute(new SendMessage(this.update.message().chat().id(), this.properties.getProperty(this.Language + ".date_error")));
+        }
+    }
+    private void Remember2(String time){
+        try {
+            this.dataBase.AddTime(this.UserId, time);
+            this.dataBase.SetUserState(this.UserId, "STATE_REMEMBER2");
+            this.bot.execute(new SendMessage(this.update.message().chat().id(), this.properties.getProperty(this.Language + ".remember3")));
+        } catch (SQLException e) {
+            this.bot.execute(new SendMessage(this.update.message().chat().id(), this.properties.getProperty(this.Language + ".time_error")));
+        }
+    }
 
+    private void Remember3(String message){
+        try {
+            this.dataBase.AddMessage(this.UserId, message);
+            this.dataBase.SetUserState(this.UserId, "-1");
+            this.bot.execute(new SendMessage(this.update.message().chat().id(), this.properties.getProperty(this.Language + ".remember4")));
+        } catch (SQLException e) {
+            this.bot.execute(new SendMessage(this.update.message().chat().id(), this.properties.getProperty(this.Language + ".error")));
+        }
     }
     private void Show_Schedule(String text){
         //TODO
@@ -114,21 +140,21 @@ public class Commands {
         this.bot.execute(new SendMessage(update.message().chat().id(), Result));
     }
 
-    private int Updates(String text){
-        try {
-            if (text != null)
-                this.bot.execute(new SendMessage(update.message().chat().id(), text));
-
-            GetUpdates getUpdates = new GetUpdates().limit(1).timeout(20000).offset(this.update.updateId() + 1);
-            GetUpdatesResponse updatesResponse = bot.execute(getUpdates);
-            this.update = updatesResponse.updates().get(0);
-//            this.remember.add(this.update.message().text());
-        }
-        catch (Exception e){
-            System.out.println(e.getMessage());
-            return -1;
-        }
-        return 0;
-    }
+//    private int Updates(String text){
+//        try {
+//            if (text != null)
+//                this.bot.execute(new SendMessage(this.update.message().chat().id(), text));
+//
+//            GetUpdates getUpdates = new GetUpdates().limit(1).timeout(20000).offset(this.update.updateId() + 1);
+//            GetUpdatesResponse updatesResponse = this.bot.execute(getUpdates);
+//            this.update = updatesResponse.updates().get(0);
+////            this.remember.add(this.update.message().text());
+//        }
+//        catch (Exception e){
+//            System.out.println(e.getMessage());
+//            return -1;
+//        }
+//        return 0;
+//    }
 
 }

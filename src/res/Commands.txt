@@ -5,3 +5,4 @@
 /show_schedule 'день' - планы на день
 /delete 'id' - Удаление заметки
 /change_language 'language' - Смена языка
+/stop - отмена команды
