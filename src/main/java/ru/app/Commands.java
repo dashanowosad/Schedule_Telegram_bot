@@ -2,12 +2,8 @@ package ru.app;
 
 import com.pengrad.telegrambot.TelegramBot;
 import com.pengrad.telegrambot.model.Update;
-import com.pengrad.telegrambot.request.GetUpdates;
 import com.pengrad.telegrambot.request.SendMessage;
-import com.pengrad.telegrambot.response.GetUpdatesResponse;
-import kotlin.Pair;
 
-import javax.xml.crypto.Data;
 import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.IOException;
@@ -16,6 +12,7 @@ import java.nio.charset.Charset;
 import java.sql.SQLException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.time.DateTimeException;
 import java.util.*;
 
 public class Commands {
@@ -31,7 +28,7 @@ public class Commands {
 //    private ArrayList<String> remember; //сохраняем 1 отложенное сообщение в виде: дата, время, текст
 //    private PriorityQueue <Pair<Integer, String>> remembers; //все отложенные сообщения в порядке *какое раньше произойдет*
 
-    public Commands(Parsing_JSON parsing_json, TelegramBot bot, Update update) throws IOException, SQLException {
+    public Commands(Parsing_JSON parsing_json, TelegramBot bot, Update update) throws IOException, SQLException, ParseException {
         this.Language = parsing_json.GetLanguage();
         this.UserId = parsing_json.GetUserId();
         this.command = parsing_json.GetText();
@@ -41,8 +38,6 @@ public class Commands {
 
         this.dataBase.CheckUser(this.UserId, this.Language);
         String state = this.dataBase.GetUserState(this.UserId);
-//        System.out.println(state);
-//        this.remember = new ArrayList<>();
 
         ///TODO использование языка из базы данных (выбор языка пользователем)
         this.properties = new Properties();
@@ -52,29 +47,36 @@ public class Commands {
             this.properties.load(new FileReader("src/main/resources/lang_en.properties"));
         ///
 
-        if (command.contains("/start"))
-            this.Start();
-        else if (command.contains("/help"))
-            this.Help();
-        else if (command.contains("/add"))
-            this.Add(command.replace("/add",""));
-        else if (command.contains("/remember") && state.equals("-1"))
-//            this.Remember(command.replace("/remember", ""));
-            this.Remember();
-        else if (command.contains("/show_schedule"))
-            this.Show_Schedule(command.replace("/show_schedule",""));
-        else if (command.contains("/delete"))
-            this.Delete(command.replace("/delete",""));
+        //TODO сделать через switch внутри if
+        if (state.equals("-1")) {
+            if (command.contains("/start"))
+                this.Start();
+            else if (command.contains("/help"))
+                this.Help();
+            else if (command.contains("/add"))
+                this.Add(command.replace("/add", ""));
+        //remember
+            else if (command.contains("/remember"))
+                this.Remember();
+            else if (command.contains("/show_remember"))
+                this.Show_Remembers();
+            else if (command.contains("/show_schedule"))
+                this.Show_Schedule(command.replace("/show_schedule", ""));
+            else if (command.contains("/delete"))
+                this.Delete(command.replace("/delete", ""));
+            else
+                this.Wrong_Command(command);
+        }
 
-        else if (state.equals("STATE_REMEMBER"))
-            this.Remember1(this.command);
-        else if (state.equals("STATE_REMEMBER1"))
-            this.Remember2(this.command);
-        else if (state.equals("STATE_REMEMBER2"))
-            this.Remember3(this.command);
+        //диалог с пользователем, исходя из его состояния
+        else {
+            switch (state) {
+                case "STATE_REMEMBER" -> this.Remember1(this.command);
+                case "STATE_REMEMBER1" -> this.Remember2(this.command);
+                case "STATE_REMEMBER2" -> this.Remember3(this.command);
+            }
+        }
 
-        else
-            this.Wrong_Command(command);
     }
 
     private void Start() {
@@ -98,18 +100,50 @@ public class Commands {
     }
     private void Remember1(String text) throws SQLException {
         try {
-            Date date = new SimpleDateFormat("dd.MM.yyyy").parse(text);
+            String[] d = new String[3];
+            Calendar calendar = Calendar.getInstance();
+            if (text.contains("/"))
+                d = text.split("/");
+            else if (text.contains("-"))
+                d = text.split("-");
+            else if (text.contains("."))
+                d = text.split("\\.");
+            //проверка на формат
+            else
+                throw new DateTimeException(this.properties.getProperty(this.Language + ".date_error"));
+            //проверка на корректность месяца
+            if (Integer.parseInt(d[1]) > 12 || Integer.parseInt(d[1]) < 1)
+                throw new DateTimeException(this.properties.getProperty(this.Language + ".date2_error"));
+            //проверка на год
+            if (Integer.parseInt(d[2]) < calendar.get(Calendar.YEAR))
+                throw new DateTimeException(this.properties.getProperty(this.Language + ".date3_error"));
+            //проверка на месяц
+            if ((Integer.parseInt(d[1]) < (calendar.get(Calendar.MONTH) + 1)) &&
+                    (Integer.parseInt(d[2]) <= (calendar.get(Calendar.YEAR))))
+                throw new DateTimeException(this.properties.getProperty(this.Language + ".date3_error"));
+            //проверка на день
+            if ((Integer.parseInt(d[0]) < (calendar.get(Calendar.DAY_OF_MONTH))) &&
+                    (Integer.parseInt(d[1]) <= (calendar.get(Calendar.MONTH) + 1))&&
+                    (Integer.parseInt(d[2]) <= (calendar.get(Calendar.YEAR))))
+                throw new DateTimeException(this.properties.getProperty(this.Language + ".date3_error"));
+            text = d[0] + "/" + d[1] + "/" + d[2];
+
+            Date date = new SimpleDateFormat("dd/MM/yyyy").parse(text);
             String resDate = new SimpleDateFormat("yyyy-MM-dd").format(date);
 
             this.dataBase.AddDate(this.UserId, resDate);
             this.dataBase.SetUserState(this.UserId, "STATE_REMEMBER1");
             this.bot.execute(new SendMessage(this.update.message().chat().id(), this.properties.getProperty(this.Language + ".remember2")));
-        } catch (ParseException e) {
-            this.bot.execute(new SendMessage(this.update.message().chat().id(), this.properties.getProperty(this.Language + ".date_error")));
+        } catch (ParseException | DateTimeException e) {
+            if (e.getClass().getCanonicalName().contains("ParseException"))
+                this.bot.execute(new SendMessage(this.update.message().chat().id(), this.properties.getProperty(this.Language + ".date_error")));
+            else if (e.getClass().getCanonicalName().contains("DateTimeException"))
+                this.bot.execute(new SendMessage(this.update.message().chat().id(),e.getMessage()));
         }
     }
     private void Remember2(String time){
         try {
+            //TODO проверки времени (не забыть сравнить с датой)
             this.dataBase.AddTime(this.UserId, time);
             this.dataBase.SetUserState(this.UserId, "STATE_REMEMBER2");
             this.bot.execute(new SendMessage(this.update.message().chat().id(), this.properties.getProperty(this.Language + ".remember3")));
@@ -127,6 +161,12 @@ public class Commands {
             this.bot.execute(new SendMessage(this.update.message().chat().id(), this.properties.getProperty(this.Language + ".error")));
         }
     }
+
+    private void Show_Remembers() throws SQLException, ParseException {
+        String Result = this.dataBase.ShowRemembers(this.UserId);
+        this.bot.execute(new SendMessage(update.message().chat().id(), Result));
+    }
+
     private void Show_Schedule(String text){
         //TODO
         System.out.println(text);

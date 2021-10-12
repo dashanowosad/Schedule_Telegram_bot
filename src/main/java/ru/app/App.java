@@ -10,6 +10,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.sql.Array;
 import java.sql.SQLException;
+import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Properties;
@@ -46,7 +47,7 @@ class MyThreads implements Runnable{
         try {
             Parsing_JSON parsing_json = new Parsing_JSON(this.update);
             Commands commands = new Commands(parsing_json, this.bot, this.update);
-        } catch (IOException | SQLException e) {
+        } catch (IOException | SQLException | ParseException e) {
             this.bot.execute(new SendMessage(this.update.message().chat().id(), e.getMessage()));
         }
     }
